@@ -147,7 +147,7 @@ int open_serial(char *serialport, SERHDL *hdl)
   int rc;
   DCB dcb;
   COMMTIMEOUTS timeouts;
-  unsigned char *windows_serialport;
+  char *windows_serialport;
 #define DEVICE_PREFIX "\\\\.\\" 
 
   windows_serialport = calloc(strlen(serialport) + 
