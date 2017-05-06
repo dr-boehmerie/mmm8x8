@@ -25,8 +25,8 @@
 #ifndef MMM8X8_H
 #define MMM8X8_H
 
-#include "Arduino.h"
-#include "SoftwareSerial.h"
+#include <Arduino.h>
+#include <SoftwareSerial.h>
 
 class mmm8x8
 {
@@ -36,20 +36,36 @@ class mmm8x8
 
   // Initializes serial port, reads back firmware version, returns 0 on success
   int8_t begin(void);
-  
+
+  // reset to factory settings
+  int8_t factoryReset(void);
+
+  // Set operation mode
+  enum MODES
+  {
+    NORMALMODE,
+    TEXTMODE,
+    PATTERNMODE
+  };
+  int8_t setMode(enum MODES mode);
+
   // Shows the text, optionally setting the scrolling speed
   int8_t displayText(const char *text);
   int8_t displayText(const char *text, uint8_t speed);
   int8_t setTextSpeed(uint8_t speed);
+  int8_t storeText(const char *text);
 
   // shows a pattern, one byte per line, starting with the MSB on the left
   int8_t displayPattern(const uint8_t pattern[8]);
-	
+  // saves a pattern, one byte per line, delay is in steps of 100ms
+  int8_t storeFirstPattern(const uint8_t pattern[8], uint8_t delay);
+  int8_t storeNextPattern(const uint8_t pattern[8], uint8_t delay);
+
  private:
   int8_t _pin_rx;
   int8_t _pin_tx;
   SoftwareSerial *sSerial;
-  
+
   uint16_t calc_crc16 (uint16_t crc, uint8_t value);
   int8_t recv_response (uint8_t *data, uint8_t len);
   int8_t send_byte (uint8_t data, uint16_t *crc);
@@ -60,7 +76,9 @@ class mmm8x8
   int8_t cmd_store_text (const char *text);
   int8_t cmd_set_textspeed (uint8_t spd);
   int8_t cmd_set_mode (uint8_t mode);
-  int8_t cmd_set_factoryreset (void);
+  int8_t cmd_factoryreset (void);
+  int8_t cmd_display_pattern(const uint8_t pattern[8]);
+  int8_t cmd_store_pattern(const uint8_t pattern[8], uint8_t delay, uint8_t cmd);
 
 };
 

@@ -8,6 +8,7 @@
 
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <avr/pgmspace.h>
 #include <util/delay.h>
 
@@ -15,7 +16,6 @@
 
 
 // MMM8x8 Commands
-// firmware version is returned in a 12 byte response, all other commands use 6 byte responses
 #define CMD_GET_VERSION      'v'
 #define CMD_DISPLAY_TEXT     'E'
 #define CMD_STORE_TEXT       'J'
@@ -28,6 +28,9 @@
 #define CMD_PATTERN_MODE     'B'
 #define CMD_FACTORY_RESET    'X'
 
+// firmware version is returned in a 12 byte response, all other commands use 6 byte responses
+#define MMM8x8_RESPONSE_LEN  6
+#define MMM8x8_FIRMWARE_LEN  12
 
 // Special Characters
 #define STX    0x02
@@ -55,9 +58,7 @@
 #define MMM8x8_BAUD   38400
 
 
-//SoftwareSerial sSerial(10, 11); // RX, TX
-
-
+// private functions
 uint16_t mmm8x8::calc_crc16 (uint16_t crc, uint8_t value)
 {
   for (uint8_t i = 0; i < 8; i++)
@@ -80,7 +81,6 @@ int8_t mmm8x8::recv_response (uint8_t *data, uint8_t len)
 {
   int8_t  rc;
   uint8_t n;
-  uint8_t rx;
 
   if (sSerial == NULL)
     return RET_COMMAND_ERR_READ;
@@ -95,9 +95,9 @@ int8_t mmm8x8::recv_response (uint8_t *data, uint8_t len)
     /* wait for data, TODO timeout */
     if (sSerial->available())
     {
-      rx = sSerial->read();
+      uint8_t rx = sSerial->read();
       n++;
-      
+
       if (len >= 4 && n == 3 && rx == NAK)
       {
         /* NAK received in the 4th byte -> abort with error */
@@ -258,21 +258,21 @@ EXIT:
 int8_t mmm8x8::cmd_get_firmwareversion (uint8_t *buffer, uint8_t maxLen)
 {
   int8_t  rc;
-  uint8_t resp[12];
+  uint8_t resp[MMM8x8_FIRMWARE_LEN];
 
   rc = send_command (CMD_GET_VERSION, 0, NULL);
   if (rc == RET_COMMAND_OK)
   {
-    rc = recv_response (resp, sizeof(resp));
+    rc = recv_response (resp, MMM8x8_FIRMWARE_LEN);
     if (rc == RET_COMMAND_OK)
-	{
+    {
       if (buffer != NULL)
       {
-        if (maxLen > sizeof(resp))
-          maxLen = sizeof(resp);
+        if (maxLen > MMM8x8_FIRMWARE_LEN)
+          maxLen = MMM8x8_FIRMWARE_LEN;
         memcpy(buffer, resp, maxLen);
       }
-	}
+    }
   }
   return rc;
 }
@@ -280,14 +280,14 @@ int8_t mmm8x8::cmd_get_firmwareversion (uint8_t *buffer, uint8_t maxLen)
 int8_t mmm8x8::cmd_display_text (const char *text)
 {
   int8_t  rc;
-  uint8_t resp[6];
+  uint8_t resp[MMM8x8_RESPONSE_LEN];
   uint8_t len;
 
   len = strlen (text);
   rc = send_command (CMD_DISPLAY_TEXT, len, (const uint8_t *)text);
   if (rc == RET_COMMAND_OK)
   {
-    rc = recv_response (resp, sizeof(resp));
+    rc = recv_response (resp, MMM8x8_RESPONSE_LEN);
   }
   return rc;
 }
@@ -295,14 +295,14 @@ int8_t mmm8x8::cmd_display_text (const char *text)
 int8_t mmm8x8::cmd_store_text (const char *text)
 {
   int8_t  rc;
-  uint8_t resp[6];
+  uint8_t resp[MMM8x8_RESPONSE_LEN];
   uint8_t len;
 
   len = strlen (text);
   rc = send_command (CMD_STORE_TEXT, len, (const uint8_t *)text);
   if (rc == RET_COMMAND_OK)
   {
-    rc = recv_response (resp, sizeof(resp));
+    rc = recv_response (resp, MMM8x8_RESPONSE_LEN);
   }
   return rc;
 }
@@ -310,12 +310,12 @@ int8_t mmm8x8::cmd_store_text (const char *text)
 int8_t mmm8x8::cmd_set_textspeed (uint8_t spd)
 {
   int8_t  rc;
-  uint8_t resp[6];
+  uint8_t resp[MMM8x8_RESPONSE_LEN];
 
   rc = send_command (CMD_SET_TEXT_SPEED, 1, &spd);
   if (rc == RET_COMMAND_OK)
   {
-    rc = recv_response (resp, sizeof(resp));
+    rc = recv_response (resp, MMM8x8_RESPONSE_LEN);
   }
   return rc;
 }
@@ -323,17 +323,17 @@ int8_t mmm8x8::cmd_set_textspeed (uint8_t spd)
 int8_t mmm8x8::cmd_set_mode (uint8_t mode)
 {
   int8_t  rc;
-  uint8_t resp[6];
+  uint8_t resp[MMM8x8_RESPONSE_LEN];
 
   rc = send_command (mode, 0, NULL);
   if (rc == RET_COMMAND_OK)
   {
-    rc = recv_response (resp, sizeof(resp));
+    rc = recv_response (resp, MMM8x8_RESPONSE_LEN);
   }
   return rc;
 }
 
-int8_t mmm8x8::cmd_set_factoryreset (void)
+int8_t mmm8x8::cmd_factoryreset (void)
 {
   int8_t  rc;
 
@@ -341,23 +341,54 @@ int8_t mmm8x8::cmd_set_factoryreset (void)
   return rc;
 }
 
+int8_t mmm8x8::cmd_display_pattern(const uint8_t pattern[8])
+{
+  int8_t  rc;
+  uint8_t resp[MMM8x8_RESPONSE_LEN];
+
+  rc = send_command(CMD_DISPLAY_PATTERN, 8, pattern);
+  if (rc == RET_COMMAND_OK)
+  {
+    rc = recv_response(resp, MMM8x8_RESPONSE_LEN);
+  }
+  return rc;
+}
+
+int8_t mmm8x8::cmd_store_pattern(const uint8_t pattern[8], uint8_t delay, uint8_t cmd)
+{
+  int8_t  rc;
+  uint8_t buffer[8 + 1];
+
+  memcpy(buffer, pattern, 8);
+  buffer[8] = delay;
+
+  rc = send_command(cmd, 8 + 1, buffer);
+  if (rc == RET_COMMAND_OK)
+  {
+    rc = recv_response(buffer, MMM8x8_RESPONSE_LEN);
+  }
+  return rc;
+}
 
 
 
 
 
-// RX and TX pin for SoftwareSerial
+// public functions
 mmm8x8::mmm8x8(int8_t pin_rx, int8_t pin_tx)
 {
+  // RX and TX pin for SoftwareSerial
   _pin_rx = pin_rx;
   _pin_tx = pin_tx;
-  
+
   sSerial = new SoftwareSerial(pin_rx, pin_tx);
 }
 
 // Initializes serial port, reads back firmware version, returns 0 on success
 int8_t mmm8x8::begin(void)
 {
+  int8_t rc = RET_COMMAND_PARAMETER;
+
   if (sSerial != NULL)
   {
     // initialize software serial
@@ -365,16 +396,45 @@ int8_t mmm8x8::begin(void)
     // set timeout for readBytes in milliseconds
     sSerial->setTimeout (1000);
 
-    return cmd_get_firmwareversion(NULL, 0);
+    rc = cmd_get_firmwareversion(NULL, 0);
   }
-  return RET_COMMAND_PARAMETER;
+  return rc;
 }
-  
-// Shows the text, optionally setting the scrolling speed
+
+// Sets operation mode
+int8_t mmm8x8::setMode(enum MODES mode)
+{
+  int8_t rc = RET_COMMAND_PARAMETER;
+  uint8_t cmd;
+
+  switch (mode)
+  {
+  case NORMALMODE:
+    cmd = CMD_NORMAL_MODE;
+    break;
+
+  case TEXTMODE:
+    cmd = CMD_TEXT_MODE;
+    break;
+
+  case PATTERNMODE:
+    cmd = CMD_PATTERN_MODE;
+    break;
+
+  default:
+    return rc;
+    break;
+  }
+
+  rc = send_command(cmd, 0, NULL);
+  return rc;
+}
+
+// Shows the text
 int8_t mmm8x8::displayText(const char *text)
 {
   int8_t rc = RET_COMMAND_PARAMETER;
-  
+
   if (text != NULL)
   {
     rc = cmd_display_text(text);
@@ -382,24 +442,79 @@ int8_t mmm8x8::displayText(const char *text)
   return rc;
 }
 
+// Shows the text and sets the scrolling speed
 int8_t mmm8x8::displayText(const char *text, uint8_t speed)
 {
+  int8_t rc = RET_COMMAND_PARAMETER;
+
   if (text != NULL)
   {
-    if (cmd_set_textspeed(speed) == RET_COMMAND_OK)
-      return cmd_display_text(text);
+    rc = cmd_set_textspeed(speed);
+    if (rc == RET_COMMAND_OK)
+    {
+      rc = cmd_display_text(text);
+    }
   }
-  return RET_COMMAND_PARAMETER;
+  return rc;
 }
 
+// Sets text speed
 int8_t mmm8x8::setTextSpeed(uint8_t speed)
 {
   return cmd_set_textspeed(speed);
 }
 
-// shows a pattern, one byte per line, starting with the MSB on the left
+// Saves text to flash
+int8_t mmm8x8::storeText(const char *text)
+{
+  int8_t rc = RET_COMMAND_PARAMETER;
+
+  if (text != NULL)
+  {
+    rc = cmd_store_text(text);
+  }
+  return rc;
+}
+
+// Shows a pattern, one byte per line, starting with the MSB on the left
 int8_t mmm8x8::displayPattern(const uint8_t pattern[8])
 {
-  return RET_COMMAND_PARAMETER;
+  int8_t rc = RET_COMMAND_PARAMETER;
+
+  if (pattern != NULL)
+  {
+    rc = cmd_display_pattern(pattern);
+  }
+  return rc;
+}
+
+// Stores first pattern to flash, delay is in steps of 100ms
+int8_t mmm8x8::storeFirstPattern(const uint8_t pattern[8], uint8_t delay)
+{
+  int8_t rc = RET_COMMAND_PARAMETER;
+
+  if (pattern != NULL)
+  {
+    rc = cmd_store_pattern(pattern, delay, CMD_STORE_PATTERN0);
+  }
+  return rc;
+}
+
+// Stores following patterns to flash, delay is in steps of 100ms
+int8_t mmm8x8::storeNextPattern(const uint8_t pattern[8], uint8_t delay)
+{
+  int8_t rc = RET_COMMAND_PARAMETER;
+
+  if (pattern != NULL)
+  {
+    rc = cmd_store_pattern(pattern, delay, CMD_STORE_PATTERNx);
+  }
+  return rc;
+}
+
+// Resets to factory settings
+int8_t mmm8x8::factoryReset(void)
+{
+  return cmd_factoryreset();
 }
 
